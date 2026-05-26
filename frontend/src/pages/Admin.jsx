@@ -1,5 +1,5 @@
 // pages/Admin.jsx — Panel de administracion: usuarios CRUD con cedula, audit log, estadisticas
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { adminAPI } from '../services/api';
 import './Admin.css';
 
@@ -22,9 +22,7 @@ export default function Admin() {
   const [confirmMessage, setConfirmMessage] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  useEffect(() => { loadData(); }, [tab]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       if (tab === 'users') {
@@ -39,7 +37,9 @@ export default function Admin() {
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  };
+  }, [tab]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleSort = (field) => {
     if (sortField === field) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -165,7 +165,7 @@ export default function Admin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedUsers.map((u) => (
+                  {sortedUsers.length > 0 ? sortedUsers.map((u) => (
                     <tr key={u.id}>
                       <td className="td-name">{u.full_name}</td>
                       <td className="mono">{u.identification_doc || '\u2014'}</td>
@@ -185,7 +185,13 @@ export default function Admin() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  )) : (
+                    <tr>
+                      <td colSpan={8}>
+                        <p className="empty-message">No hay usuarios registrados para mostrar</p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -207,7 +213,7 @@ export default function Admin() {
                 </thead>
                 <tbody>
                   {auditLog.map((entry) => (
-                    <>
+                    <Fragment key={entry.id}>
                       <tr key={entry.id} className={`audit-row ${expandedLog === entry.id ? 'expanded' : ''}`} onClick={() => setExpandedLog(expandedLog === entry.id ? null : entry.id)} style={{cursor:'pointer'}}>
                         <td style={{textAlign:'center'}}>
                           <span className={`expand-icon ${expandedLog === entry.id ? 'open' : ''}`}>&#9654;</span>
@@ -296,7 +302,7 @@ export default function Admin() {
                         </tr>
                         );
                       })()}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -329,6 +335,9 @@ export default function Admin() {
                 <div className="stat-detail-row"><span>Entradas</span><strong>{stats.audit_log?.total_entries}</strong></div>
               </div>
             </div>
+          )}
+          {tab === 'stats' && !stats && (
+            <p className="empty-message">No se pudieron cargar las estadisticas administrativas</p>
           )}
         </div>
       )}

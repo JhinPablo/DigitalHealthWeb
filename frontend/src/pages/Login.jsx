@@ -1,7 +1,7 @@
 // pages/Login.jsx — Pantalla de login con doble API-Key
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import './Login.css';
 
 export default function Login() {
@@ -171,3 +171,4 @@ export default function Login() {
     </div>
   );
 }
+

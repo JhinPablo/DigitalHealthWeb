@@ -12,7 +12,7 @@
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary, #8b5cf6));
+  background: linear-gradient(135deg, var(--color-accent), #8b5cf6);
   color: white;
   display: flex;
   align-items: center;
@@ -88,8 +88,8 @@
 }
 
 .tab-btn.active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
 }
 
 /* Section header */
@@ -146,7 +146,7 @@
 }
 
 .report-card:hover {
-  border-color: var(--color-primary);
+  border-color: var(--color-accent);
 }
 
 .report-card.signed {
@@ -207,7 +207,7 @@
 .risk-score {
   font-size: 1.2rem;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-accent);
 }
 
 .action-selector {
@@ -242,7 +242,7 @@
 }
 
 .action-option input[type="radio"] {
-  accent-color: var(--color-primary);
+  accent-color: var(--color-accent);
 }
 
 .action-label {
@@ -272,7 +272,7 @@
 }
 
 .image-card:hover {
-  border-color: var(--color-primary);
+  border-color: var(--color-accent);
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
@@ -535,6 +535,18 @@
   background: #000;
 }
 
+.patient-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.task-status {
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .patient-header {
@@ -544,7 +556,28 @@
   }
 
   .patient-meta {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
+    text-align: left;
+    width: 100%;
+  }
+
+  .detail-tabs {
+    overflow-x: auto;
+    padding-bottom: 1px;
+  }
+
+  .tab-btn {
+    flex: 0 0 auto;
+    padding-inline: 0.85rem;
+  }
+
+  .report-card,
+  .report-info,
+  .section-header,
+  .lightbox-header,
+  .lightbox-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .charts-grid {

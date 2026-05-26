@@ -8,15 +8,23 @@
   background: var(--color-bg-primary);
   position: relative;
   overflow: hidden;
+  padding: var(--space-4);
 }
 
 /* ─── Background Effects ─── */
 .bg-orb {
+  display: none;
+}
+
+.login-page::before {
+  content: '';
   position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.15;
-  pointer-events: none;
+  inset: 0;
+  background:
+    linear-gradient(rgba(59, 130, 246, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.05) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
 }
 .bg-orb-1 {
   width: 500px; height: 500px;
@@ -200,3 +208,13 @@
 }
 
 .modal-actions .btn { width: 100%; }
+
+@media (max-width: 520px) {
+  .login-container {
+    padding: var(--space-6);
+  }
+
+  .login-title {
+    font-size: var(--text-2xl);
+  }
+}

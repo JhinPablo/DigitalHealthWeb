@@ -168,6 +168,7 @@
 
 .data-table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: var(--text-sm);
 }
@@ -218,4 +219,34 @@
   color: var(--color-text-muted);
   padding: var(--space-8);
   font-size: var(--text-sm);
+}
+
+.dashboard-alert {
+  padding: var(--space-4);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: var(--radius-md);
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+@media (max-width: 720px) {
+  .welcome-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-6);
+  }
+
+  .welcome-date {
+    text-align: left;
+  }
+
+  .welcome-name {
+    font-size: var(--text-2xl);
+  }
 }

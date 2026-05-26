@@ -1,7 +1,7 @@
 // pages/Dashboard.jsx — Vista principal con metricas y resumen
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { patientsAPI, adminAPI } from '../services/api';
 import './Dashboard.css';
 
@@ -13,10 +13,10 @@ export default function Dashboard() {
   const [totalPatients, setTotalPatients] = useState(0);
   const [pendingReports, setPendingReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    setLoadError('');
     try {
       const patientsRes = await patientsAPI.list(5, 0);
       setRecentPatients(patientsRes.data.data || []);
@@ -31,16 +31,19 @@ export default function Dashboard() {
         try {
           const repRes = await patientsAPI.pendingReports();
           setPendingReports(repRes.data.data || []);
-        } catch (e) {
+        } catch {
           setPendingReports([]);
         }
       }
     } catch (err) {
       console.error('Error cargando dashboard:', err);
+      setLoadError('No se pudo sincronizar el dashboard con el backend. Verifica que Docker Compose este activo.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.role]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   const goToPatient = (patientId) => {
     // Guardar ID para que Patients.jsx lo detecte
@@ -86,6 +89,13 @@ export default function Dashboard() {
           <span className="welcome-day">{new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
         </div>
       </div>
+
+      {loadError && (
+        <div className="dashboard-alert">
+          <span>{loadError}</span>
+          <button className="btn btn-sm btn-secondary" onClick={loadData}>Reintentar</button>
+        </div>
+      )}
 
       {/* Stats Cards - visible para todos los roles */}
       <div className="stats-grid">
@@ -221,3 +231,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

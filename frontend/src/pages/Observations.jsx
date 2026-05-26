@@ -1,6 +1,6 @@
 // pages/Observations.jsx — CRUD completo con busqueda por cedula
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { observationsAPI, patientsAPI } from '../services/api';
 import './Observations.css';
 
@@ -38,10 +38,7 @@ export default function Observations() {
   const [formError, setFormError] = useState('');
   const LIMIT = 20;
 
-  useEffect(() => { loadPatients(); }, []);
-  useEffect(() => { loadObs(); }, [page, selectedPatient]);
-
-  const loadPatients = async () => {
+  const loadPatients = useCallback(async () => {
     try {
       let allPatients = [];
       let offset = 0;
@@ -57,9 +54,9 @@ export default function Observations() {
     } catch (err) {
       console.error('Error cargando pacientes:', err);
     }
-  };
+  }, []);
 
-  const loadObs = async () => {
+  const loadObs = useCallback(async () => {
     setLoading(true);
     try {
       const res = await observationsAPI.list(selectedPatient || undefined, LIMIT, page * LIMIT);
@@ -70,7 +67,10 @@ export default function Observations() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, selectedPatient]);
+
+  useEffect(() => { loadPatients(); }, [loadPatients]);
+  useEffect(() => { loadObs(); }, [loadObs]);
 
   const searchByCedula = useCallback(() => {
     if (!cedulaInput.trim()) { setFoundPatient(null); setCedulaError(''); return; }
@@ -266,7 +266,7 @@ export default function Observations() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((o) => (
+                  {sorted.length > 0 ? sorted.map((o) => (
                     <tr key={o.id} className={o.is_outlier ? 'row-outlier' : ''}>
                       <td className="mono">{o.loinc_code}</td>
                       <td>{o.loinc_display || '\u2014'}</td>
@@ -290,7 +290,13 @@ export default function Observations() {
                         </td>
                       )}
                     </tr>
-                  ))}
+                  )) : (
+                    <tr>
+                      <td colSpan={canCreate ? 8 : 7}>
+                        <p className="empty-message">No hay observaciones para el filtro seleccionado</p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -387,3 +393,4 @@ export default function Observations() {
     </div>
   );
 }
+

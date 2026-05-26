@@ -28,9 +28,9 @@ nginx (80)  -->  frontend (React SPA)
 git clone https://github.com/jfgarzonv/proyecto-fhir-salud-digital.git
 cd proyecto-fhir-salud-digital
 
-# Copiar y configurar variables de entorno
-cp .env.example .env
-nano .env  # editar con valores reales
+# Copiar y configurar variables de entorno para Docker Compose
+cp .env.example .env.docker
+nano .env.docker  # editar con valores reales
 
 # Levantar todo
 docker compose up -d --build
@@ -38,6 +38,22 @@ docker compose up -d --build
 # Ejecutar seed (crea usuarios, pacientes, observaciones, imagenes)
 docker compose exec backend python seed_db.py
 ```
+
+## Demo local y despliegue
+
+- Guia DigitalOcean por IP publica: [`docs/DEPLOY_DIGITALOCEAN.md`](docs/DEPLOY_DIGITALOCEAN.md)
+- Checklist contra las guias del curso: [`docs/CHECKLIST_GUIAS.md`](docs/CHECKLIST_GUIAS.md)
+
+Para validar localmente:
+
+```bash
+docker compose config
+docker compose up -d --build
+docker compose exec backend python seed_db.py
+curl -f http://localhost/health
+```
+
+> Nota: esta fase entrega una demo solida sin HAPI FHIR, Agente RAG, Redis, MLflow, dominio ni HTTPS. Esos puntos quedan documentados como fase 2 en el checklist.
 
 ## Credenciales de prueba
 

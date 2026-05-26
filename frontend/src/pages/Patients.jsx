@@ -1,6 +1,6 @@
 // pages/Patients.jsx — Lista paginada con CRUD, medico asignado, ordenamiento
-import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/useAuth';
 import { patientsAPI } from '../services/api';
 import PatientDetail from './PatientDetail';
 import './Patients.css';
@@ -24,21 +24,7 @@ export default function Patients() {
   const [formError, setFormError] = useState('');
   const LIMIT = 10;
 
-  useEffect(() => {
-    loadPatients();
-    loadDoctors();
-
-    // Auto-abrir paciente si viene del Dashboard
-    const viewId = sessionStorage.getItem('viewPatientId');
-    if (viewId) {
-      setSelectedId(viewId);
-      sessionStorage.removeItem('viewPatientId');
-    }
-  }, []);
-
-  useEffect(() => { loadPatients(); }, [page]);
-
-  const loadPatients = async () => {
+  const loadPatients = useCallback(async () => {
     setLoading(true);
     try {
       const res = await patientsAPI.list(LIMIT, page * LIMIT);
@@ -49,16 +35,29 @@ export default function Patients() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page]);
 
-  const loadDoctors = async () => {
+  const loadDoctors = useCallback(async () => {
     try {
       const res = await patientsAPI.doctors();
       setDoctors(res.data.data || []);
     } catch (err) {
       console.error('Error cargando medicos:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadDoctors();
+
+    // Auto-abrir paciente si viene del Dashboard
+    const viewId = sessionStorage.getItem('viewPatientId');
+    if (viewId) {
+      setSelectedId(viewId);
+      sessionStorage.removeItem('viewPatientId');
+    }
+  }, [loadDoctors]);
+
+  useEffect(() => { loadPatients(); }, [loadPatients]);
 
   const handleDelete = async (id) => {
     if (!confirm('Eliminar este paciente? (soft-delete)')) return;
@@ -187,7 +186,7 @@ export default function Patients() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((p) => (
+                  {filtered.length > 0 ? filtered.map((p) => (
                     <tr key={p.id}>
                       <td className="td-name clickable" onClick={() => setSelectedId(p.id)}>{p.name}</td>
                       <td>{p.gender === 'male' ? 'M' : p.gender === 'female' ? 'F' : '\u2014'}</td>
@@ -212,7 +211,13 @@ export default function Patients() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  )) : (
+                    <tr>
+                      <td colSpan={8}>
+                        <p className="empty-message">No hay pacientes que coincidan con la busqueda actual</p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -293,3 +298,4 @@ export default function Patients() {
     </div>
   );
 }
+

@@ -1,6 +1,6 @@
 // components/Layout.jsx — Layout principal con sidebar y header
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import './Layout.css';
 
 const NAV_ITEMS = [
@@ -119,3 +119,4 @@ export default function Layout() {
     </div>
   );
 }
+

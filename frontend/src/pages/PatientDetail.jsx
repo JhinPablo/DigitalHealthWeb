@@ -1,6 +1,6 @@
 // pages/PatientDetail.jsx — Ficha clinica con observaciones, reportes, imagenes y firma
-import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/useAuth';
 import { observationsAPI, patientsAPI, imagesAPI, inferenceAPI } from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import './PatientDetail.css';
@@ -47,9 +47,8 @@ export default function PatientDetail({ patientId, onBack }) {
   // Delete Image confirm
   const [deleteConfirmImage, setDeleteConfirmImage] = useState(null);
 
-  useEffect(() => { loadData(); }, [patientId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    setLoading(true);
     try {
       const [patRes, obsRes] = await Promise.all([
         patientsAPI.get(patientId),
@@ -62,7 +61,7 @@ export default function PatientDetail({ patientId, onBack }) {
       try {
         const imgRes = await imagesAPI.listByPatient(patientId);
         setImages(imgRes.data.data || []);
-      } catch (e) {
+      } catch {
         setImages([]);
       }
 
@@ -70,7 +69,7 @@ export default function PatientDetail({ patientId, onBack }) {
       try {
         const repRes = await patientsAPI.riskReports(patientId);
         setRiskReports(repRes.data.data || []);
-      } catch (e) {
+      } catch {
         setRiskReports([]);
       }
     } catch (err) {
@@ -78,7 +77,9 @@ export default function PatientDetail({ patientId, onBack }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [patientId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   // ── FIRMA DE RISK REPORT ──
   const openSignModal = (report) => {
@@ -305,7 +306,7 @@ export default function PatientDetail({ patientId, onBack }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedObs.map((o) => (
+                  {sortedObs.length > 0 ? sortedObs.map((o) => (
                     <tr key={o.id} className={o.is_outlier ? 'row-outlier' : ''}>
                       <td className="mono">{o.loinc_code}</td>
                       <td>{o.loinc_display || '—'}</td>
@@ -318,7 +319,13 @@ export default function PatientDetail({ patientId, onBack }) {
                           : <span className="badge badge-success">Normal</span>}
                       </td>
                     </tr>
-                  ))}
+                  )) : (
+                    <tr>
+                      <td colSpan={6}>
+                        <p className="empty-message">No hay observaciones registradas en la ficha clinica</p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -508,6 +515,11 @@ export default function PatientDetail({ patientId, onBack }) {
           >
             {mlLoading ? <><span className="spinner" /> Ejecutando modelo...</> : 'Ejecutar Analisis ML'}
           </button>
+          {mlTaskId && (
+            <p className="task-status">
+              Tarea ML: <span className="mono">{mlTaskId}</span>
+            </p>
+          )}
 
           {mlError && <div className="form-error" style={{marginTop:'12px'}}>{mlError}</div>}
 
@@ -627,6 +639,11 @@ export default function PatientDetail({ patientId, onBack }) {
                 ))}
               </div>
               {dlLoading && <div style={{textAlign:'center',padding:'20px'}}><span className="spinner spinner-lg" /> <p>Analizando imagen...</p></div>}
+              {dlTaskId && (
+                <p className="task-status">
+                  Tarea DL: <span className="mono">{dlTaskId}</span>
+                </p>
+              )}
               {dlError && <div className="form-error">{dlError}</div>}
 
               {dlResult && (
@@ -900,3 +917,4 @@ export default function PatientDetail({ patientId, onBack }) {
     </div>
   );
 }
+
