@@ -1,11 +1,13 @@
-import random
-import math
+import os
+import time
+import numpy as np
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
+import onnxruntime as ort
 
-app = FastAPI(title="ML Service — Diabetes Risk (ONNX Mock)")
+app = FastAPI(title="ML Service — Diabetes Risk (ONNX)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -14,7 +16,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Feature schema (PIMA Diabetes) ─────────────────────────────
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "diabetes_model.onnx")
+
+FEATURE_NAMES = [
+    "Pregnancies", "Glucose", "BloodPressure", "SkinThickness",
+    "Insulin", "BMI", "DiabetesPedigreeFunction", "Age",
+]
+
+# PIMA training-set medians and stds (for SHAP approximation)
+_MEDIANS = {
+    "Pregnancies": 3.0, "Glucose": 117.0, "BloodPressure": 72.0,
+    "SkinThickness": 23.0, "Insulin": 30.5, "BMI": 32.0,
+    "DiabetesPedigreeFunction": 0.372, "Age": 29.0,
+}
+_STDS = {
+    "Pregnancies": 3.37, "Glucose": 31.97, "BloodPressure": 12.33,
+    "SkinThickness": 11.76, "Insulin": 115.24, "BMI": 7.88,
+    "DiabetesPedigreeFunction": 0.33, "Age": 13.27,
+}
+
+_session: ort.InferenceSession = None
+_input_name: str = None
+
+
+@app.on_event("startup")
+def load_model():
+    global _session, _input_name
+    _session = ort.InferenceSession(MODEL_PATH, providers=["CPUExecutionProvider"])
+    _input_name = _session.get_inputs()[0].name
+
+
 class PredictRequest(BaseModel):
     patient_id: Optional[str] = None
     Pregnancies: float = 0
@@ -27,53 +58,14 @@ class PredictRequest(BaseModel):
     Age: float = 30
 
 
-# ── Rangos normales para calcular riesgo ───────────────────────
-THRESHOLDS = {
-    "Glucose": {"normal": 100, "high": 140, "weight": 0.30},
-    "BMI": {"normal": 25, "high": 35, "weight": 0.20},
-    "Age": {"normal": 30, "high": 55, "weight": 0.12},
-    "BloodPressure": {"normal": 80, "high": 130, "weight": 0.10},
-    "Insulin": {"normal": 80, "high": 200, "weight": 0.10},
-    "DiabetesPedigreeFunction": {"normal": 0.3, "high": 1.0, "weight": 0.08},
-    "SkinThickness": {"normal": 20, "high": 40, "weight": 0.05},
-    "Pregnancies": {"normal": 2, "high": 8, "weight": 0.05},
-}
-
-
-def compute_risk(features: dict) -> dict:
-    """Calcula riesgo simulado basado en los features."""
-    score = 0.0
+def _shap_approx(features: dict, prob: float) -> dict:
+    """Approximate marginal SHAP contribution via feature deviation from median."""
     shap_values = {}
-
-    for feat, thres in THRESHOLDS.items():
-        val = features.get(feat, thres["normal"])
-        normal = thres["normal"]
-        high = thres["high"]
-        weight = thres["weight"]
-
-        # Normalizar entre 0 y 1
-        if high != normal:
-            normalized = max(0, min(1, (val - normal) / (high - normal)))
-        else:
-            normalized = 0
-
-        contribution = normalized * weight
-        score += contribution
-
-        # SHAP: contribución positiva si por encima de normal, negativa si por debajo
-        shap_val = (val - normal) / max(1, (high - normal)) * weight
-        shap_values[feat] = round(shap_val, 4)
-
-
-    score = max(0.05, min(0.98, score))
-    score += random.uniform(-0.03, 0.03)
-    score = max(0.02, min(0.99, score))
-
-    return {
-        "probability": round(score, 4),
-        "prediction": 1 if score >= 0.5 else 0,
-        "shap_values": shap_values,
-    }
+    for feat in FEATURE_NAMES:
+        val = features[feat]
+        deviation = (val - _MEDIANS[feat]) / max(_STDS[feat], 1e-6)
+        shap_values[feat] = round(float(deviation * prob * 0.12), 4)
+    return shap_values
 
 
 @app.post("/predict")
@@ -89,9 +81,15 @@ def predict(req: PredictRequest):
         "Age": req.Age,
     }
 
-    result = compute_risk(features)
+    x = np.array([[features[f] for f in FEATURE_NAMES]], dtype=np.float32)
 
-    prob = result["probability"]
+    t0 = time.perf_counter()
+    labels, probas = _session.run(None, {_input_name: x})
+    elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+
+    prediction = int(labels[0])
+    prob = float(probas[0][1])
+
     if prob >= 0.75:
         risk_category = "CRITICAL"
     elif prob >= 0.50:
@@ -105,19 +103,25 @@ def predict(req: PredictRequest):
         "patient_id": req.patient_id,
         "model_type": "ML",
         "model_name": "diabetes_pima_onnx_v1",
-        "prediction": result["prediction"],
-        "probability": prob,
+        "prediction": prediction,
+        "probability": round(prob, 4),
         "risk_category": risk_category,
         "risk_prediction": {
-            "diabetes_positive": prob,
+            "diabetes_positive": round(prob, 4),
             "diabetes_negative": round(1 - prob, 4),
         },
-        "shap_values": result["shap_values"],
+        "shap_values": _shap_approx(features, prob),
         "calibration": "isotonic",
-        "inference_time_ms": round(random.uniform(50, 200), 1),
+        "inference_time_ms": elapsed_ms,
     }
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "ml-service", "model": "diabetes_pima_onnx_mock"}
+    loaded = _session is not None
+    return {
+        "status": "ok",
+        "service": "ml-service",
+        "model": "diabetes_pima_onnx_v1",
+        "model_loaded": loaded,
+    }

@@ -1,9 +1,9 @@
-// App.jsx — Raíz de la aplicación con rutas protegidas
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { useAuth } from './context/useAuth';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
+import Terms from './pages/Terms';
 import Dashboard from './pages/Dashboard';
 import Patients from './pages/Patients';
 import Observations from './pages/Observations';
@@ -31,18 +31,29 @@ function ProtectedRoute({ children, allowedRoles }) {
 }
 
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <div className="spinner spinner-lg" />
+      </div>
+    );
+  }
 
   return (
     <Routes>
+      {/* Rutas públicas */}
+      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Landing />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/terms" element={<Terms />} />
 
+      {/* Rutas protegidas dentro del Layout */}
       <Route path="/" element={
         <ProtectedRoute>
           <Layout />
         </ProtectedRoute>
       }>
-        <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="patients" element={<Patients />} />
         <Route path="observations" element={
@@ -62,7 +73,8 @@ function AppRoutes() {
         } />
       </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
@@ -76,4 +88,3 @@ export default function App() {
     </BrowserRouter>
   );
 }
-

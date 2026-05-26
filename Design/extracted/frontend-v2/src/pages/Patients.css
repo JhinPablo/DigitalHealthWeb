@@ -1,0 +1,26 @@
+/* pages/Patients.css — premium */
+
+.patients-page { display: flex; flex-direction: column; gap: var(--s-5); }
+
+.patients-toolbar {
+  display: flex; gap: var(--s-3); align-items: center;
+  flex-wrap: wrap;
+}
+.search-input {
+  max-width: 480px;
+  padding-left: 40px !important;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236C7886' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='M21 21l-4.3-4.3'/></svg>");
+  background-repeat: no-repeat;
+  background-position: 14px center;
+}
+
+.sort-icon {
+  display: inline-block; margin-left: 4px;
+  opacity: .5; font-size: 10px;
+  transition: opacity var(--d-fast) var(--ease);
+}
+.data-table .sortable:hover .sort-icon { opacity: 1; color: var(--sage); }
+
+.action-buttons { display: inline-flex; gap: var(--s-2); }
+
+/* Patient detail (PatientDetail.css también) */

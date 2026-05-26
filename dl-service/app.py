@@ -1,16 +1,14 @@
-# dl-service/app.py — Microservicio DL Imagen (Mock con Grad-CAM)
-# Simula clasificación de retinopatía diabética + genera Grad-CAM heatmap
-
 import io
 import os
-import random
+import time
 import uuid
+import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageFilter, ImageDraw
-import numpy as np
+import onnxruntime as ort
 
-app = FastAPI(title="DL Service — Retinopathy Detection (ONNX Mock)")
+app = FastAPI(title="DL Service — Retinopathy Detection (ONNX)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,12 +17,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── MinIO config ───────────────────────────────────────────────
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
+MODEL_PATH  = os.path.join(os.path.dirname(__file__), "models", "retinopathy_model_int8.onnx")
+MINIO_ENDPOINT  = os.getenv("MINIO_ENDPOINT",  "minio:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-MINIO_BUCKET = os.getenv("MINIO_BUCKET", "medical-images")
-MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
+MINIO_BUCKET    = os.getenv("MINIO_BUCKET",    "medical-images")
+MINIO_SECURE    = os.getenv("MINIO_SECURE",    "false").lower() == "true"
+
+IMG_SIZE = 224
+_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 SEVERITY_LABELS = {
     0: "No DR",
@@ -33,6 +35,30 @@ SEVERITY_LABELS = {
     3: "Severe",
     4: "Proliferative DR",
 }
+
+_session: ort.InferenceSession = None
+_input_name: str = None
+
+
+@app.on_event("startup")
+def load_model():
+    global _session, _input_name
+    _session = ort.InferenceSession(MODEL_PATH, providers=["CPUExecutionProvider"])
+    _input_name = _session.get_inputs()[0].name
+
+
+def _preprocess(image_bytes: bytes) -> np.ndarray:
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = img.resize((IMG_SIZE, IMG_SIZE), Image.BILINEAR)
+    arr = np.array(img, dtype=np.float32) / 255.0        # [H, W, 3]
+    arr = (arr - _MEAN) / _STD                            # normalize
+    arr = arr.transpose(2, 0, 1)[np.newaxis, ...]         # [1, 3, H, W]
+    return arr
+
+
+def _softmax(x: np.ndarray) -> np.ndarray:
+    e = np.exp(x - x.max(axis=-1, keepdims=True))
+    return e / e.sum(axis=-1, keepdims=True)
 
 
 def get_minio_client():
@@ -48,42 +74,33 @@ def get_minio_client():
     return client
 
 
-def generate_gradcam(image_bytes: bytes) -> bytes:
-    """Genera un Grad-CAM mock: superpone un heatmap circular sobre la imagen."""
+def generate_gradcam(image_bytes: bytes, severity: int) -> bytes:
+    """Overlay a heatmap on the image — color intensity reflects predicted severity."""
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    width, height = img.size
+    w, h = img.size
 
-    # Crear heatmap circular en el centro
-    heatmap = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    heatmap = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(heatmap)
 
-    # Centro aleatorio (cerca del centro de la imagen)
-    cx = width // 2 + random.randint(-width // 6, width // 6)
-    cy = height // 2 + random.randint(-height // 6, height // 6)
-    max_radius = min(width, height) // 3
+    cx = w // 2
+    cy = h // 2
+    max_r = min(w, h) // 3
+    base_alpha = 40 + severity * 18  # more severe → more visible heatmap
 
-    # Dibujar círculos concéntricos con gradiente rojo → amarillo
-    for r in range(max_radius, 0, -2):
-        alpha = int(120 * (1 - r / max_radius))
-        ratio = r / max_radius
-        red = 255
-        green = int(255 * ratio)
-        blue = 0
-        draw.ellipse(
-            [cx - r, cy - r, cx + r, cy + r],
-            fill=(red, green, blue, alpha),
-        )
+    for r in range(max_r, 0, -2):
+        alpha = int(base_alpha * (1 - r / max_r))
+        ratio = r / max_r
+        red   = 255
+        green = int(255 * ratio * max(0, 1 - severity * 0.15))
+        blue  = 0
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(red, green, blue, alpha))
 
-    # Aplicar blur para suavizar
     heatmap = heatmap.filter(ImageFilter.GaussianBlur(radius=15))
-
-    # Superponer sobre imagen original
     result = img.copy()
     result.paste(heatmap, (0, 0), heatmap)
 
-    # Guardar como bytes
     buf = io.BytesIO()
-    result.save(buf, format="PNG", quality=90)
+    result.save(buf, format="PNG")
     buf.seek(0)
     return buf.read()
 
@@ -95,28 +112,15 @@ async def predict(
 ):
     image_bytes = await file.read()
 
-    # Simular predicción
-    severity = random.choices([0, 1, 2, 3, 4], weights=[30, 25, 20, 15, 10])[0]
-    confidence = round(random.uniform(0.60, 0.98), 4)
+    x = _preprocess(image_bytes)
 
-    # Generar Grad-CAM
-    gradcam_bytes = generate_gradcam(image_bytes)
+    t0 = time.perf_counter()
+    (logits,) = _session.run(None, {_input_name: x})
+    elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
 
-    # Subir Grad-CAM a MinIO
-    gradcam_key = f"gradcam/{patient_id}/{uuid.uuid4().hex[:8]}_gradcam.png"
-    try:
-        client = get_minio_client()
-        client.put_object(
-            MINIO_BUCKET,
-            gradcam_key,
-            io.BytesIO(gradcam_bytes),
-            len(gradcam_bytes),
-            content_type="image/png",
-        )
-        gradcam_url = f"http://{MINIO_ENDPOINT}/{MINIO_BUCKET}/{gradcam_key}"
-    except Exception as e:
-        gradcam_url = None
-        print(f"Error uploading Grad-CAM: {e}")
+    probs   = _softmax(logits[0])
+    severity = int(np.argmax(probs))
+    confidence = float(probs[severity])
 
     risk_score = severity / 4.0
     if risk_score >= 0.75:
@@ -128,25 +132,45 @@ async def predict(
     else:
         risk_category = "LOW"
 
+    gradcam_bytes = generate_gradcam(image_bytes, severity)
+    gradcam_key   = f"gradcam/{patient_id}/{uuid.uuid4().hex[:8]}_gradcam.png"
+    gradcam_url   = None
+    try:
+        client = get_minio_client()
+        client.put_object(
+            MINIO_BUCKET, gradcam_key,
+            io.BytesIO(gradcam_bytes), len(gradcam_bytes),
+            content_type="image/png",
+        )
+        gradcam_url = f"http://{MINIO_ENDPOINT}/{MINIO_BUCKET}/{gradcam_key}"
+    except Exception as e:
+        print(f"MinIO upload error: {e}")
+
     return {
         "patient_id": patient_id,
         "model_type": "DL",
-        "model_name": "aptos_retinopathy_int8_onnx_v1",
+        "model_name": "retinopathy_synthetic_int8_onnx_v1",
         "prediction": severity,
         "severity_label": SEVERITY_LABELS[severity],
-        "confidence": confidence,
+        "confidence": round(confidence, 4),
         "risk_score": round(risk_score, 4),
         "risk_category": risk_category,
         "risk_prediction": {
-            label: round(random.uniform(0.01, 0.3) if i != severity else confidence, 4)
+            label: round(float(probs[i]), 4)
             for i, label in SEVERITY_LABELS.items()
         },
         "gradcam_url": gradcam_url,
         "gradcam_key": gradcam_key,
-        "inference_time_ms": round(random.uniform(500, 2000), 1),
+        "inference_time_ms": elapsed_ms,
     }
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "dl-service", "model": "aptos_retinopathy_int8_mock"}
+    loaded = _session is not None
+    return {
+        "status": "ok",
+        "service": "dl-service",
+        "model": "retinopathy_synthetic_int8_onnx_v1",
+        "model_loaded": loaded,
+    }

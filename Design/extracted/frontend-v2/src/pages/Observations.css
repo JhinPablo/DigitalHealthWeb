@@ -1,0 +1,42 @@
+/* pages/Observations.css */
+
+.observations-page { display: flex; flex-direction: column; gap: var(--s-5); }
+
+.obs-toolbar { display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap; }
+
+.filter-search-wrapper { position: relative; }
+.filter-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0;
+  width: 320px; max-height: 320px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: var(--r-md); box-shadow: var(--shadow-lg);
+  z-index: 20;
+}
+.filter-option {
+  padding: var(--s-3) var(--s-4); cursor: pointer;
+  font-size: var(--t-sm); color: var(--ink-2);
+  display: flex; align-items: center; justify-content: space-between;
+  transition: background var(--d-fast) var(--ease);
+  border-bottom: 1px solid var(--hairline);
+}
+.filter-option:hover { background: var(--paper-2); color: var(--ink); }
+.filter-option:last-child { border-bottom: none; }
+.filter-empty { color: var(--ink-3); cursor: default; }
+.filter-empty:hover { background: transparent; }
+.filter-name { font-weight: 500; color: var(--ink); }
+.filter-doc { color: var(--ink-3); font-size: var(--t-xs); font-family: var(--font-mono); }
+
+.cedula-search-row { display: flex; gap: var(--s-2); }
+.cedula-search-row .input { flex: 1; }
+.patient-found-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--s-3) var(--s-4);
+  background: var(--sage-soft);
+  border: 1px solid var(--sage);
+  border-radius: var(--r-md);
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.patient-found-info { display: flex; flex-direction: column; gap: 2px; }
+.patient-found-name { font-weight: 500; color: var(--ink); font-size: var(--t-sm); }
+.patient-found-meta { color: var(--ink-3); font-size: var(--t-xs); }
